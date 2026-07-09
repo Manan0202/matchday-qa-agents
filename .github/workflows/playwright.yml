@@ -1,0 +1,55 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout QA agents repo
+        uses: actions/checkout@v4
+        with:
+          path: qa-agents
+
+      - name: Checkout MatchDay (app under test)
+        uses: actions/checkout@v4
+        with:
+          repository: Manan0202/matchday
+          path: matchday
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install QA agents dependencies
+        working-directory: qa-agents
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: qa-agents
+        run: npx playwright install --with-deps chromium
+
+      - name: Install MatchDay dependencies
+        working-directory: matchday
+        run: npm ci
+
+      - name: Run Playwright tests
+        working-directory: qa-agents
+        # MATCHDAY_DIR points at the sibling checkout above, overriding the
+        # local-dev default of "../matchday" only if paths ever diverge.
+        env:
+          MATCHDAY_DIR: ../matchday
+        run: npx playwright test
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: qa-agents/playwright-report/
+          retention-days: 14
