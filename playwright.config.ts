@@ -17,7 +17,13 @@ export default defineConfig({
     reporter: [['list'], ['html', { open: 'never' }]],
     use: {
         baseURL: BASE_URL,
-        trace: 'on-first-retry',
+        // 'on-first-retry' only captures a trace when a test is retried —
+        // but retries are 0 locally (only CI retries), so that setting
+        // silently never captured anything outside CI. 'retain-on-failure'
+        // captures on any failure regardless of retry count, and discards
+        // it for passing tests, so it isn't paying the overhead for the
+        // common case.
+        trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',
     },
@@ -32,8 +38,24 @@ export default defineConfig({
         // production database.
     },
     projects: [
+        // Pure functions, no server/network/browser — fastest layer, runs
+        // first so a broken business-rule oracle fails loud before the
+        // slower layers even start.
+        {
+            name: 'unit',
+            testMatch: 'unit/**/*.spec.ts',
+        },
+        // Hits MatchDay's REST routes directly via Playwright's `request`
+        // fixture — no browser, but does need the dev server up.
+        {
+            name: 'api',
+            testMatch: 'api/**/*.spec.ts',
+            use: { baseURL: BASE_URL },
+        },
+        // Full browser E2E — the existing smoke/regression suites.
         {
             name: 'chromium',
+            testMatch: ['smoke/**/*.spec.ts', 'regression/**/*.spec.ts'],
             use: { ...devices['Desktop Chrome'] },
         },
     ],
