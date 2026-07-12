@@ -18,24 +18,45 @@ export class EventPage {
     }
 
     async selectSeats(count: number) {
+        // Deliberately .first(), not .nth(i): this locator is live and
+        // shrinks with every click (a selected seat's data-seat-status
+        // flips away from AVAILABLE). .nth(i) against a shrinking set
+        // drifts — after i clicks, the "i-th available seat" isn't the
+        // i-th one you originally saw, and once the section has fewer
+        // than `count` seats left un-clicked, .nth(count-1) has nothing to
+        // match and hangs until timeout. Re-querying .first() each time
+        // is immune to this regardless of how large `count` is relative
+        // to the section's total seats.
         for (let i = 0; i < count; i++) {
-            await this.availableSeats.nth(i).click()
+            await this.availableSeats.first().click()
         }
     }
 
-    // Scopes to one named section (e.g. "Club Level") so price-sensitive
-    // scenarios select from the section they actually mean, rather than
-    // whichever seats happen to render first on the page.
+    // Scopes to one named section's own container (e.g. "Club Level") —
+    // reused for seat selection and for reading that section's own price
+    // label, since an event with multiple identically-priced sections
+    // (e.g. two sections both "$50 / seat") makes an unscoped page-wide
+    // text search ambiguous.
+    sectionContainer(sectionName: string): Locator {
+        return this.page.locator('div.rounded-lg', { hasText: sectionName })
+    }
+
     availableSeatsInSection(sectionName: string): Locator {
-        return this.page
-            .locator('div.rounded-lg', { hasText: sectionName })
-            .locator('[data-seat-status="AVAILABLE"]')
+        return this.sectionContainer(sectionName).locator('[data-seat-status="AVAILABLE"]')
+    }
+
+    // The heading price label renders as "$50 / seat" — whole dollars, no
+    // cents — unlike the checkout/running-total displays, which do show
+    // cents.
+    sectionPriceText(sectionName: string): Locator {
+        return this.sectionContainer(sectionName).getByText(/^\$\d+ \/ seat$/)
     }
 
     async selectSeatsInSection(sectionName: string, count: number) {
+        // Same .first()-not-.nth(i) reasoning as selectSeats() above.
         const seats = this.availableSeatsInSection(sectionName)
         for (let i = 0; i < count; i++) {
-            await seats.nth(i).click()
+            await seats.first().click()
         }
     }
 

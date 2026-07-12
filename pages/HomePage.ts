@@ -5,6 +5,14 @@ export class HomePage {
     readonly sportFilter: (sport: string) => Locator
     readonly leagueFilter: (league: string) => Locator
     readonly eventCard: (label: string) => Locator
+    // Scoped by the event's unique id (its detail-page href), not by
+    // matchup text — two different events can render the identical
+    // "HOME vs AWAY" label (e.g. a rematch, or two fixtures generated from
+    // the same team pair in tests), which makes text-based lookup
+    // ambiguous. Prefer this whenever you already know the specific
+    // event's id, as full-booking-journey.spec.ts does for its
+    // API-created fixtures.
+    readonly eventCardByHref: (eventId: string) => Locator
 
     constructor(page: Page) {
         this.page = page
@@ -12,6 +20,7 @@ export class HomePage {
             page.getByRole('button', { name: new RegExp(sport, 'i') })
         this.leagueFilter = (league: string) => page.getByRole('button', { name: league })
         this.eventCard = (label: string) => page.getByText(label, { exact: false })
+        this.eventCardByHref = (eventId: string) => page.locator(`a[href="/events/${eventId}"]`)
     }
 
     async goto() {
@@ -33,6 +42,11 @@ export class HomePage {
     async openEvent(matchLabel: string) {
         await this.eventCard(matchLabel).first().click()
         await this.page.waitForURL(/\/events\//)
+    }
+
+    async openEventById(eventId: string) {
+        await this.eventCardByHref(eventId).click()
+        await this.page.waitForURL(`/events/${eventId}`)
     }
 
     async expectVisibleLeagues(leagues: string[]) {

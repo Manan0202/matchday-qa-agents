@@ -12,10 +12,22 @@ find out *why* — precisely — before proposing any change.
 
 1. Run the failing test (`npx playwright test <file> --trace on`) and read
    the actual failure: the assertion that failed, the trace, screenshots,
-   console messages, and network requests around the failure point.
-2. Reproduce the same flow directly against the live app via the Playwright
-   MCP browser tools — don't take the test's word for what should happen;
-   verify it yourself, live.
+   console messages, and network requests around the failure point. For a
+   `tests/api/*` spec there's no browser trace/screenshot to lean on —
+   instead read the failing assertion's actual vs. expected status code and
+   response body directly from the test output.
+2. Reproduce the same behavior independently before touching anything:
+   - For a UI spec (`tests/smoke/`, `tests/regression/`): drive the same
+     flow live via the Playwright MCP browser tools — don't take the test's
+     word for what should happen; verify it yourself, live.
+   - For an API spec (`tests/api/`): reproduce the same request outside the
+     test, e.g. `curl -i -X POST http://localhost:3010/api/... -d '...'`, or
+     drive the equivalent UI action in the browser and check
+     `mcp__playwright__browser_network_requests` for the same call — confirm
+     the real response before deciding the test's expectation is wrong.
+   - For a unit spec (`tests/unit/`): re-derive the expected value by hand
+     from the documented business rule; a unit failure almost always means
+     the shared helper in `utils/` has a real bug, not a flaky environment.
 3. Classify the failure as one of:
    - **App bug** — MatchDay genuinely behaves differently than the approved
      plan says it should. The test is correct; MatchDay is wrong.

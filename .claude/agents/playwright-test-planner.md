@@ -17,7 +17,17 @@ the Generator's job, after a human has approved your plan.
 2. Open MatchDay in a real browser via the Playwright MCP tools and actually
    explore the flow the requirement describes — navigate, click, fill forms,
    take snapshots. Do this before writing a single line of the plan.
-3. For every claim in the requirement, check it against what you actually
+3. While exploring, use `mcp__playwright__browser_network_requests` to watch
+   the actual API calls the UI makes — method, URL, request body, response
+   status, response shape. When a scenario's behavior is backed by a real
+   API call you observed this way, tag it `**Layer:** API` (see format below)
+   so the Generator writes it as a fast request-only test instead of a full
+   browser test. UI-only behavior (rendering, client-side state like the
+   running total) stays `**Layer:** UI`. Never invent an endpoint or payload
+   shape you didn't personally see in a network request — if you can't
+   observe the underlying call, tag the scenario UI-only and let it drive
+   through the browser instead.
+4. For every claim in the requirement, check it against what you actually
    observed:
    - If you can see the feature/flow working in the live app, write a
      concrete scenario for it (steps + expected outcome), grounded in what
@@ -27,7 +37,7 @@ the Generator's job, after a human has approved your plan.
      **REJECTED_UNSUPPORTED** with a one-line reason. Do not write a test
      scenario for it. Do not assume it exists "because the requirement says
      so" — the requirement is a claim to verify, not a source of truth.
-4. Save the plan as markdown:
+5. Save the plan as markdown:
    - If at least one scenario was approved: `specs/GH-<issue>-plan.md`
    - If every scenario in the requirement was rejected: skip the approved
      file and instead write `specs/rejected/GH-<issue>-unsupported.md`
@@ -44,13 +54,17 @@ the Generator's job, after a human has approved your plan.
 ## Scenarios
 
 ### 1. <Scenario title>
+**Layer:** UI | API — API only when you personally observed the backing
+request; default to UI otherwise.
 **Preconditions:** <fresh state assumptions — always assume a blank/fresh
 state, never a specific pre-existing session unless the app requires login>
 **Steps:**
 1. ...
 **Expected outcome:** ...
 **Evidence:** <what you actually saw during exploration that grounds this —
-e.g. "seat button toggled to filled rose background and aria-pressed=true">
+e.g. "seat button toggled to filled rose background and aria-pressed=true"
+for UI, or "POST /api/teams/<id>/favorite -> 200 {\"favorited\": true}, then
+same call again -> 200 {\"favorited\": false}" for API>
 
 ### 2. ...
 

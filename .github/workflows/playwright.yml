@@ -38,12 +38,29 @@ jobs:
         working-directory: matchday
         run: npm ci
 
+      # Locally, MatchDay picks up DATABASE_URL from its own .env file —
+      # but .env* is gitignored (by design, it's environment-specific), so
+      # a fresh CI checkout has no .env and no dev.db at all. Without this
+      # step, Prisma can't even initialize and every test fails before a
+      # single one runs, regardless of what those tests actually check.
+      - name: Set up MatchDay database
+        working-directory: matchday
+        env:
+          DATABASE_URL: file:./prisma/dev.db
+        run: |
+          npx prisma migrate deploy
+          npm run db:seed
+
       - name: Run Playwright tests
         working-directory: qa-agents
         # MATCHDAY_DIR points at the sibling checkout above, overriding the
         # local-dev default of "../matchday" only if paths ever diverge.
+        # DATABASE_URL must match the "Set up MatchDay database" step above
+        # — Playwright's webServer spawns MatchDay's dev server as a child
+        # process, which inherits this step's env, not the previous step's.
         env:
           MATCHDAY_DIR: ../matchday
+          DATABASE_URL: file:./prisma/dev.db
         run: npx playwright test
 
       - name: Upload report on failure

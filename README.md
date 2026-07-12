@@ -11,13 +11,14 @@ the Planner hallucinating features that don't actually exist.
 ```text
 requirements/GH-XXX.md
         ↓
-Planner agent explores MatchDay live via Playwright MCP
+Planner agent explores MatchDay live via Playwright MCP, tagging each
+scenario Layer: UI or Layer: API based on what it actually observed
         ↓
 specs/GH-XXX-plan.md (evidence-based; unsupported claims → specs/rejected/)
         ↓
 Human reviews and approves the plan
         ↓
-Generator agent writes tests/*.spec.ts (reusing pages/, fixtures/, test-data/)
+Generator agent writes tests/*.spec.ts (reusing pages/, api/, fixtures/, test-data/)
         ↓
 GitHub Actions runs the suite
         ↓
@@ -25,6 +26,40 @@ Pass → done.  Fail → Healer agent investigates and proposes the smallest fix
         ↓
 Human reviews and approves the fix
 ```
+
+**Hard rule:** never dispatch multiple Planner (or Healer) agents concurrently
+— they share one Playwright MCP browser session, and running them in
+parallel causes real cross-contamination (auth state flips, spontaneous
+navigation). This produced one false-positive bug report during development
+(see `specs/rejected/GH-003-unsupported.md`'s retraction). The Generator is
+unaffected — it drives isolated browser/request contexts via
+`npx playwright test`, not the shared MCP session — so Generator runs can
+still be parallelized safely.
+
+## Three test layers — a real testing pyramid, not just E2E
+
+```text
+tests/unit/         Pure functions, no server, no network — milliseconds.
+                     Covers this repo's own oracles (utils/pricing.ts).
+tests/api/           HTTP-only via Playwright's `request` fixture — no
+                     browser. Covers MatchDay's REST contract directly:
+                     status codes, response bodies, auth boundaries,
+                     negative/edge cases, race conditions, data isolation.
+tests/smoke/          Full browser E2E — critical-path user flows.
+tests/regression/     Full browser E2E — broader coverage, including
+                     network-interception tests (page.route()) that mock
+                     backend failures to test frontend error handling
+                     deterministically (error-handling.spec.ts), and a
+                     test.beforeEach/afterEach-driven journey suite that
+                     creates/tears down its own isolated fixture event via
+                     the Admin API per test instead of sharing GH-001's
+                     seeded event (full-booking-journey.spec.ts).
+```
+
+All three run as separate Playwright projects (`playwright.config.ts`) and
+share one `npm test`. A single approved plan can produce a matched pair of
+specs — one per layer — when a scenario is backed by both an observable API
+call and user-visible UI behavior.
 
 ## Project structure
 
@@ -34,11 +69,21 @@ Human reviews and approves the fix
 requirements/             Input: user stories + acceptance criteria (GH-XXX.md)
 specs/                    Output of the Planner: approved test plans
 specs/rejected/           Claims the Planner couldn't verify against the live app
-pages/                    Page Object Model — one file per MatchDay screen
+pages/                    Page Object Model — one class per MatchDay screen
+api/                      API Object Model — one class per MatchDay REST
+                          resource (AuthApi, EventsApi, BookingsApi,
+                          FavoritesApi, WaitlistApi, AdminEventsApi,
+                          AdminTeamsApi, AdminVenuesApi), the request-only
+                          counterpart to pages/. Covers every HTTP verb
+                          MatchDay exposes — GET, POST, PUT, DELETE.
 fixtures/                 Shared Playwright fixtures (auth, seeded state, ...)
-test-data/                 Reusable sample data
-tests/smoke/               Fast, critical-path specs
-tests/regression/          Broader coverage
+test-data/                 Reusable sample data (e.g. seeded account creds)
+utils/                    Pure helpers with no network calls (pricing oracle,
+                          currency formatting, test-user generation)
+tests/unit/                Fast pure-function specs (no server)
+tests/api/                 Request-only specs (no browser)
+tests/smoke/               Fast, critical-path E2E specs
+tests/regression/          Broader E2E coverage
 ```
 
 ## Why MatchDay, and why this matters
@@ -54,6 +99,14 @@ exist in MatchDay (in-app payment method selection, promo codes, and email
 receipts). The Planner is expected to verify each claim against the live app
 and reject the unsupported ones into `specs/rejected/`, rather than trusting
 the requirement document at face value.
+
+`GH-003`–`GH-005` cover following/favoriting teams, the sold-out-event
+waitlist, and the role-gated admin analytics dashboard — chosen because each
+exercises a different shape of coverage: a toggling API contract, an
+idempotent join-with-auth-redirect flow, and a UI-only feature with no REST
+route behind it at all (a Server Component doing direct Prisma queries),
+which the Planner correctly recognized and tagged accordingly rather than
+forcing an API scenario that doesn't exist.
 
 ## Running locally
 
